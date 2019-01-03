@@ -17,5 +17,6 @@
 
 * 语言无关
   * [Markdown](markdown)
+  * [Color](color)
 * 语言相关
   * [Android](android)
