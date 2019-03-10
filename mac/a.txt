@@ -1,0 +1,12 @@
+
+修改苹果Mac终端～之前的计算机名
+
+打开终端，执行下面命令，"Tmp"是你想要修改的计算机名。
+
+```
+sudo scutil --set HostName Tmp
+```
+
+（ps：执行过后命令，需要强行退出终端，重新打开就好了。）
+
+登录github。打开setting->SSH keys，点击右上角 New SSH key，把生成好的公钥id_rsa.pub放进 key输入框中，再为当前的key起一个title来区分每个key。
