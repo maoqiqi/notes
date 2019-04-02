@@ -3,7 +3,7 @@ script: true
 deploy:
   provider: pages
   skip_cleanup: true
-  github_token: "$TOKEN"
+  github_token: "$TOKEN1"
   keep_history: true
   on:
     branch: gh-pages
