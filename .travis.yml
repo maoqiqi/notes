@@ -1,0 +1,18 @@
+language: generic
+script: true
+deploy:
+  provider: pages
+  skip_cleanup: false
+  github_token: "$TOKEN"
+  keep_history: true
+  local_dir: android
+  on:
+    branch: master
+env:
+- NAME=notes
+- VERSION="1.0.0"
+global:
+  secure: ovOrUJe9M6L2Yc9BoMEYBnoqBwTYnszFkfFYS1Br+F88wOAkRQTQK8LswioKcCCxyJBnw+hfCKphWGFA56Mvl1kLpHRJibRsfRfcF1clWD4A8D+ZhTobjgFu+P9PJHXksoJfd2c6UtMUCtLXQ2fPXrV8whUh70Ol6+6qcp7azdnn8G+wvzgxP0KamVYguKBWtqDnJOduSvly//UBQRiEygvnGnw65oIZ7FvW4ksVNNtZHP1NGEH+w3u5wNVo7jAkHGAJMoBf2l7syQUxNmVe3zYk2k0nJAfPrlIAAWbADDHie/srYVYwDX47LMocfSgC14ZPI7ewGclRrPXI4WTlEnejiBa4bUXIEUYAd3mWqWOUvvSYVgMWtFRv0cIhjg62deF611Ci85+EHZVcq1TmS4OBD+q3zUxDNYPzU2bVHrG0oeBTpuxhrHIAukNZgpUmVlYs5VnejTHxkI3gCOnzxZ/nMW2DELAVMFTo/OjcEbiIjh0RAyA6vuQa85c9gL5l2cuw7E6pK4fJZiuNZqnkVYq37J/SutgDwcoGui8OA6Da5a0ipuRrQ8VG68GylIzg+lakNPfHJjjF0mL4FLWVdBqezZj142dGShbDMZS257R9E7dOnPnWRXV38twivBSuokL8TvAsJ7ayNjTrjuW1WQ+DN5c5pSp1weXklrUKt0g=
+before_install:
+- openssl aes-256-cbc -K $encrypted_e69766e2a2e2_key -iv $encrypted_e69766e2a2e2_iv -in id_rsa_travis_ci.enc -out id_rsa_travis_ci -d
+- eval "$(ssh-agent -s)"
