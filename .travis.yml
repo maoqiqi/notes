@@ -3,10 +3,9 @@ script: true
 deploy:
   provider: pages
   skip_cleanup: true
-  github_token: "$TOKEN1"
+  github_token: "$GITHUB_TOKEN"
   keep_history: true
   on:
-    branch: gh-pages
-env:
-  global:
-    secure: biHVZgmisyufRPAB2ZAbBZioxjjmwSqetSvKdaABE6hlbNGH6rDa1PUO6TYcZqeEotrFxyThPyaMV8a8LqNwsn6Jv+Hd/76a6Q7UqwsU7wxnAgOJCTZy2rik5xfqC4MVNpXDQQY8fjVQdJo3BrFIWPP5A1ExkmxA6CsVuG1doU2eaBnOo4/Z8olkfjhtbmHq0+IsTQynpN5yobYipswpYJ6uWeb8oAfzSRMHR5q+NE2OSPfoCFcBCA7iGmQkneiYVHWXMiIWcg42f/z9s73lMPTBJCm8Kzp/vs03EwDl4EkvwcmM16pGKyjGxXU/PAcTtAHmUAYD3SZoGCEfxT6jZnSlA5Fuz/jaEWyDTv73WjqgPUJffSRU1UhJHB/7RJJHU0UTi2FkuBHPWNdvZ5RYRxw4bIDMXznsCFRLYL1UZAdCQMkEniFWEWbFhKLWgQP2HNULwr3kZNMCI6rhrNw/RGjNYHz72nHsu2wm262Vqm5c4CQJ3R3c3l7ms7WPZ6j1TcMCua7fUB89Z+ckzShxzU1K7b9ImKIdN11O+ptog1zLuXhcoplELzh2GDeDeG06dlsW42x7WwaSYEgDTIGu4EqCD+B9INNTO0AftNcnIDv56pOQBc7Nj6ihO6mn7bfN9CLulm/uZj/KCkfVzm3O3D/mBWC7fKRiw0PFtB53jWA=
+    branch: master
+before_install:
+  openssl aes-256-cbc -K $encrypted_e69766e2a2e2_key -iv $encrypted_e69766e2a2e2_iv -in id_rsa_travis_ci.enc -out id_rsa_travis_ci -d
