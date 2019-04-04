@@ -78,6 +78,12 @@ textView.setText(viewModel.getUserName());
 
 * 第一步是在将使用它的模块中启用库
 
+  数据绑定库提供了灵活性和广泛的兼容性——它是一个支持库，所以您可以在运行Android 4.0 (API级别14)或更高的设备上使用它。
+
+  建议在您的项目中使用最新的Android插件Gradle。但是，1.5.0或更高版本支持数据绑定。
+
+  要将应用程序配置为使用数据绑定，请将dataBinding元素添加到构建中。app模块中的gradle文件，如下例所示:
+
   ```
   android {
   ...
@@ -86,6 +92,9 @@ textView.setText(viewModel.getUserName());
       }
   }
   ```
+
+  > 注意：您必须为依赖于使用数据绑定的库的应用程序模块配置数据绑定，即使应用程序模块不直接使用数据绑定也是如此。
+
 * 将布局转换为数据绑定布局
 
   要将常规布局转换为数据绑定，您必须：
@@ -138,6 +147,19 @@ textView.setText(viewModel.getUserName());
   // Call the onLike() method on the viewModel when the View is clicked.
   android:onClick="@{() -> viewModel.onLike()}"
   ```
+
+  布局编辑器中的预览窗格将显示数据绑定表达式的默认值。例如，预览窗格显示在下面的示例中声明的TextView小部件上的my_default值:
+
+  ```
+  <TextView android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="@{user.firstName, default=my_default}"/>
+  ```
+
+  如果只需要在项目的设计阶段显示默认值，可以使用tools属性而不是默认表达式值。
+
+  > 注意：布局表达式应保持小而简单，因为它们不能进行单元测试并且IDE支持有限。为了简化布局表达式，您可以使用自定义绑定适配器。
+
 
 * 创建第一个布局表达式
 
@@ -304,4 +326,15 @@ textView.setText(viewModel.getUserName());
 
   我们将progressScaled属性绑定到like的数量，我们只是将一个文字整数传递给max属性。如果不添加@{}格式，数据绑定将无法找到正确的绑定适配器。
 
-*
+
+##
+
+
+## 概览
+## 开始
+## 布局和绑定表达式
+## 使用可观察的数据对象
+## 生成的绑定类
+## 绑定适配器
+## 将布局视图绑定到体系结构组件
+## 双向数据绑定
