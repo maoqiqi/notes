@@ -1,6 +1,7 @@
 # 配置方法数超过 64K 的应用
 
 随着 Android 平台的持续成长，Android 应用的大小也在增加。当您的应用及其引用的库达到特定大小时，您会遇到构建错误，指明您的应用已达到 Android 应用构建架构的极限。
+[Enable multidex for apps with over 64K methods](https://developer.android.google.cn/studio/build/multidex.html)。
 
 
 ## 目录
@@ -87,7 +88,7 @@ android {
     ```
     <?xml version="1.0" encoding="utf-8"?>
     <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-        package="com.example.myapp">
+        package="com.example.app">
         <application
                 android:name="android.support.multidex.MultiDexApplication" >
             ...
