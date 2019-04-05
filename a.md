@@ -12,11 +12,15 @@
     * [数据对象](#数据对象)
     * [绑定数据](#绑定数据)
     * [表达语言](#表达语言)
-  * [](#)
-  * [](#)
-  * [](#)
-  * [](#)
-  * [](#)
+    * [事件处理](#事件处理)
+      * [方法引用](#方法引用)
+      * [侦听器绑定](#侦听器绑定)
+    * [导入变量和包含](#导入变量和包含)
+  * [使用可观察的数据对象](#使用可观察的数据对象)
+  * [生成的绑定类](#生成的绑定类)
+  * [绑定适配器](#绑定适配器)
+  * [将布局视图绑定到体系结构组件](#将布局视图绑定到体系结构组件)
+  * [双向数据绑定](#双向数据绑定)
 
 
 ## 概览
@@ -207,14 +211,340 @@ ListItemBinding binding = DataBindingUtil.inflate(layoutInflater, R.layout.list_
   android:text="@{map[key]}"
   ```
 
-  > **注意**：要使XML在语法上正确，必须转义<字符。例如:List<String>您必须编写List&lt;String>。
+  > **注意**：要使XML在语法上正确，必须转义`<`字符。例如:List<String>您必须编写List&lt;String>。
 
   您还可以使用对象引用映射中的值`object.key`。例如，上面例子中的@{map[key]}可以替换为@{map.key}。
 
 * 字符串文字
 
+  您可以使用单引号括起属性值，这允许您在表达式中使用双引号，如以下示例所示：
 
+  ```
+  android:text='@{map["firstName"]}'
+  ```
 
+  也可以使用双引号来包围属性值。这样做时，字符串文字应该用后引号括起来```：
+
+  ```
+  android:text="@{map[`firstName`]}"
+  ```
+
+* 资源
+
+  您可以使用以下语法访问表达式中的资源：
+
+  ```
+  android:padding="@{large? @dimen/largePadding : @dimen/smallPadding}"
+  ```
+
+  格式字符串和复数可以通过提供参数来计算:
+
+  ```
+  android:text="@{@string/nameFormat(firstName, lastName)}"
+  android:text="@{@plurals/banana(bananaCount)}"
+  ```
+
+  当一个复数接受多个参数时，应传递所有参数:
+
+  ```
+  Have an orange
+  Have %d oranges
+
+  android:text="@{@plurals/orange(orangeCount, orangeCount)}"
+  ```
+
+#### 事件处理
+
+数据绑定允许您编写从视图分派的表达式处理事件（例如，onClick()方法）。事件属性名称由侦听器方法的名称确定，但有一些例外。
+例如，View.OnClickListener有一个方法onClick()，所以这个事件的属性是`android:onClick`。
+
+对于click事件，有一些特殊的事件处理程序需要使用android:onClick以外的属性来避免冲突。您可以使用以下属性来避免这些类型的冲突:
+
+| Class | Listener setter | Attribute |
+|:---|:---|:---|
+|SearchView	  |setOnSearchClickListener(View.OnClickListener) |android:onSearchClick|
+|ZoomControls |setOnZoomInClickListener(View.OnClickListener) |android:onZoomIn     |
+|ZoomControls |setOnZoomOutClickListener(View.OnClickListener)|android:onZoomOut    |
+
+您可以使用以下机制来处理事件:
+
+* 方法引用:在表达式中，可以引用符合侦听器方法签名的方法。当表达式计算为方法引用时，数据绑定将方法引用和所有者对象包装在侦听器中，并在目标视图上设置该侦听器。
+  如果表达式的计算结果为null，则数据绑定不会创建侦听器，而是设置一个空侦听器。
+* 侦听器绑定:这些是在事件发生时计算的lambda表达式。数据绑定总是创建一个侦听器，并将其设置在视图上。当事件被分派时，侦听器计算lambda表达式。
+
+##### 方法引用
+
+事件可以直接绑定到处理程序方法，类似于`android:onClick`可以分配给活动中的方法的方式。
+与View onClick属性相比的一个主要优点是表达式在编译时处理，因此如果该方法不存在或其签名不正确，则会收到编译时错误。
+
+方法引用和侦听器绑定之间的主要区别在于，实际的侦听器实现是在绑定数据时创建的，而不是在触发事件时创建的。如果希望在事件发生时计算表达式，则应该使用侦听器绑定。
+
+要将事件分配给其处理程序，请使用普通绑定表达式，其值为要调用的方法名称。例如，请考虑以下示例布局数据对象：
+
+```
+public class MyHandlers {
+    public void onClickFriend(View view) { ... }
+}
+```
+
+绑定表达式可以将视图的click listener分配给onClickFriend()方法，如下所示:
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android">
+   <data>
+       <variable name="handlers" type="com.example.MyHandlers"/>
+       <variable name="user" type="com.example.User"/>
+   </data>
+   <LinearLayout
+       android:orientation="vertical"
+       android:layout_width="match_parent"
+       android:layout_height="match_parent">
+       <TextView android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:text="@{user.firstName}"
+           android:onClick="@{handlers::onClickFriend}"/>
+   </LinearLayout>
+</layout>
+```
+
+> **注意**：表达式中方法的签名必须与侦听器对象中方法的签名完全匹配。
+
+##### 侦听器绑定
+
+侦听器绑定是在事件发生时运行的绑定表达式。它们与方法引用类似，但它们允许您运行任意数据绑定表达式。此功能适用于Gradle版本2.0及更高版本的Android Gradle插件。
+
+在方法引用中，方法的参数必须与事件侦听器的参数匹配。在侦听器绑定中，只有您的返回值必须与侦听器的预期返回值匹配（除非它期望无效）。
+例如，请考虑以下具有该`onSaveClick()`方法的演示者类：
+
+```
+public class Presenter {
+    public void onSaveClick(Task task){}
+}
+```
+
+然后，您可以将click事件绑定到onSaveClick()方法，如下所示：
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android">
+    <data>
+        <variable name="task" type="com.android.example.Task" />
+        <variable name="presenter" type="com.android.example.Presenter" />
+    </data>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent">
+        <Button android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:onClick="@{() -> presenter.onSaveClick(task)}" />
+    </LinearLayout>
+</layout>
+```
+
+当在表达式中使用回调函数时，数据绑定将自动创建必要的侦听器并为事件注册它。当视图触发事件时，数据绑定计算给定的表达式。
+与常规绑定表达式一样，在计算这些侦听器表达式时，仍然会得到null和数据绑定的线程安全性。
+
+在上面的例子中，我们没有定义传递给onClick(view)的视图参数。侦听器绑定为侦听器参数提供了两种选择:您可以忽略方法的所有参数，也可以为它们命名。
+如果喜欢为参数命名，可以在表达式中使用它们。例如，上面的表达式可以写成:
+
+```
+android:onClick="@{(view) -> presenter.onSaveClick(task)}"
+```
+
+或者如果要在表达式中使用该参数，则可以按如下方式工作：
+
+```
+public class Presenter {
+    public void onSaveClick(View view, Task task){}
+}
+```
+
+```
+android:onClick="@{(theView) -> presenter.onSaveClick(theView, task)}"
+```
+
+您可以使用带有多个参数的lambda表达式：
+
+```
+public class Presenter {
+    public void onCompletedChanged(Task task, boolean completed){}
+}
+```
+
+```
+<CheckBox android:layout_width="wrap_content" android:layout_height="wrap_content"
+      android:onCheckedChanged="@{(cb, isChecked) -> presenter.completeChanged(task, isChecked)}" />
+```
+
+如果正在侦听的事件返回一个类型不是void的值，则表达式也必须返回相同类型的值。例如，如果要监听长按事件，则表达式应返回布尔值。
+
+```
+public class Presenter {
+    public boolean onLongClick(View view, Task task) { }
+}
+```
+
+```
+android:onLongClick="@{(theView) -> presenter.onLongClick(theView, task)}"
+```
+
+如果由于null对象而无法计算表达式，数据绑定将返回该类型的默认值。例如，引用类型为null, int类型为0,boolean类型为false，等等。
+
+如果需要使用带谓词的表达式(例如三元组)，可以使用`void`作为符号。
+
+```
+android:onClick="@{(v) -> v.isVisible() ? doSomething() : void}"
+```
+
+**避免复杂的监听**
+
+侦听器表达式非常强大，可以使代码非常容易阅读。另一方面，包含复杂表达式的侦听器会使布局难以阅读和维护。这些表达式应该与将可用数据从UI传递到回调方法一样简单。
+您应该在从侦听器表达式调用的回调方法中实现任何业务逻辑。
+
+#### 导入变量和包含
+
+数据绑定库提供了导入、变量和包含等特性。导入使在布局文件中引用类变得容易。变量允许您描述可以在绑定表达式中使用的属性。包括让你在你的应用程序中重用复杂的布局。
+
+##### 导入
+
+导入允许您轻松地引用布局文件中的类，就像在托管代码中一样。数据元素中可以使用零个或多个导入元素。以下代码示例将View类导入布局文件：
+
+```
+<data>
+    <import type="android.view.View"/>
+</data>
+```
+
+导入View该类允许您从绑定表达式中引用它。下面的例子展示了如何引用View类的VISIBLE和GONE常量。
+
+```
+<TextView
+   android:text="@{user.lastName}"
+   android:layout_width="wrap_content"
+   android:layout_height="wrap_content"
+   android:visibility="@{user.isAdult ? View.VISIBLE : View.GONE}"/>
+```
+
+**输入别名**
+
+当存在类名冲突时，可以将其中一个类重命名为别名。下面的例子将com.example.real.estate包中的View类重命名为Vista:
+
+```
+<import type="android.view.View"/>
+<import type="com.example.real.estate.View"
+        alias="Vista"/>
+```
+
+在布局文件中您可以使用Vista来引用com.example.real.estate.View，使用View来引用android.view.View。
+
+**导入其他类**
+
+导入的类型可以用作变量和表达式中的类型引用。下面的例子显示了作为变量类型使用的User和List:
+
+```
+<data>
+    <import type="com.example.User"/>
+    <import type="java.util.List"/>
+    <variable name="user" type="User"/>
+    <variable name="userList" type="List&lt;User>"/>
+</data>
+```
+
+还可以使用导入的类型转换表达式的一部分。下面的示例将connection属性转换为User类型:
+
+```
+<TextView
+   android:text="@{((User)(user.connection)).lastName}"
+   android:layout_width="wrap_content"
+   android:layout_height="wrap_content"/>
+```
+
+当引用表达式中的静态字段和方法时，也可以使用导入的类型。下面的代码导入MyStringUtils类并引用它的capitalize方法:
+
+```
+<data>
+    <import type="com.example.MyStringUtils"/>
+    <variable name="user" type="com.example.User"/>
+</data>
+…
+<TextView
+   android:text="@{MyStringUtils.capitalize(user.lastName)}"
+   android:layout_width="wrap_content"
+   android:layout_height="wrap_content"/>
+```
+
+就像托管代码一样，java.lang.*会自动导入。
+
+##### 变量
+
+您可以在数据元素中使用多个变量元素。每个变量元素描述可以在布局上设置的属性，用于布局文件中的绑定表达式。下面的示例声明的user，image和note变量：
+
+```
+<data>
+    <import type="android.graphics.drawable.Drawable"/>
+    <variable name="user" type="com.example.User"/>
+    <variable name="image" type="Drawable"/>
+    <variable name="note" type="String"/>
+</data>
+```
+
+变量类型在编译时被检查，所以如果一个变量实现了Observable或者是一个Observable集合，那么它应该反映在类型中。
+如果该变量是一个基类或接口，而该基类或接口没有实现可观察的接口，则不观察变量。
+
+当不同配置(例如，横向或纵向)有不同的布局文件时，变量就会组合起来。这些布局文件之间不应该有相互冲突的变量定义。
+
+生成的绑定类为每个描述的变量都有一个setter和getter。这些变量接受默认的托管代码值，直到setter被调用，引用类型为null, int为0，布尔值为false，等等。
+
+将生成一个名为context的特殊变量，以便根据需要在绑定表达式中使用。context的值是根视图的getContext()方法中的上下文对象。上下文变量被具有该名称的显式变量声明覆盖。
+
+##### 包含
+
+通过使用app名称空间和属性中的变量名，可以将变量从包含布局传递到包含布局的绑定中。下面的示例显示了name.xml和contact.xml布局文件中的user变量:
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:bind="http://schemas.android.com/apk/res-auto">
+   <data>
+       <variable name="user" type="com.example.User"/>
+   </data>
+   <LinearLayout
+       android:orientation="vertical"
+       android:layout_width="match_parent"
+       android:layout_height="match_parent">
+       <include layout="@layout/name"
+           bind:user="@{user}"/>
+       <include layout="@layout/contact"
+           bind:user="@{user}"/>
+   </LinearLayout>
+</layout>
+```
+
+数据绑定不支持include作为merge元素的直接子元素。例如，不支持以下布局：
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:bind="http://schemas.android.com/apk/res-auto">
+   <data>
+       <variable name="user" type="com.example.User"/>
+   </data>
+   <merge><!-- Doesn't work -->
+       <include layout="@layout/name"
+           bind:user="@{user}"/>
+       <include layout="@layout/contact"
+           bind:user="@{user}"/>
+   </merge>
+</layout>
+```
+
+### 使用可观察的数据对象
+
+### 生成的绑定类
+
+### 绑定适配器
+
+### 将布局视图绑定到体系结构组件
+
+### 双向数据绑定
 
 
 
