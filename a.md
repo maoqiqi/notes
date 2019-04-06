@@ -20,9 +20,18 @@
       * [变量](#变量)
       * [包含](#包含)
   * [使用可观察的数据对象](#使用可观察的数据对象)
+    * [可观察对象](#可观察对象)
+    * [可观察的字段](#可观察的字段)
+    * [可观察的集合](#可观察的集合)
   * [生成的绑定类](#生成的绑定类)
+    * [创建绑定对象](#创建绑定对象)
   * [绑定适配器](#绑定适配器)
+    * [设置属性值](#设置属性值)
+    * [对象转换](#对象转换)
   * [将布局视图绑定到体系结构组件](#将布局视图绑定到体系结构组件)
+    * [使用LiveData通知UI有关数据更改的信息](#使用LiveData通知UI有关数据更改的信息)
+    * [使用ViewModel管理与UI相关的数据](#使用ViewModel管理与UI相关的数据)
+    * [使用Observable ViewModel可以更好地控制绑定适配器](#使用ObservableViewModel可以更好地控制绑定适配器)
   * [双向数据绑定](#双向数据绑定)
 
 
@@ -136,7 +145,7 @@ public class User {
 #### 绑定数据
 
 数据绑定库为每个布局文件生成一个绑定类。默认情况下，类的名称基于布局文件的名称。例如布局文件名是activity_main.xml，因此生成的相应类是ActivityMainBinding。
-该类包含从布局属性(例如，用户变量)到布局视图的所有绑定，并且知道如何为绑定表达式赋值。创建绑定的推荐方法是在扩展布局的同时进行绑定，如下面的示例所示:
+该类包含从布局属性(例如，user变量)到布局视图的所有绑定，并且知道如何为绑定表达式赋值。创建绑定的推荐方法是在扩展布局的同时进行绑定，如下面的示例所示:
 
 ```
 @Override
@@ -494,7 +503,7 @@ android:onClick="@{(v) -> v.isVisible() ? doSomething() : void}"
 
 当不同配置(例如，横向或纵向)有不同的布局文件时，变量就会组合起来。这些布局文件之间不应该有相互冲突的变量定义。
 
-生成的绑定类为每个描述的变量都有一个setter和getter。这些变量接受默认的托管代码值，直到setter被调用，引用类型为null, int为0，布尔值为false，等等。
+数据绑定库为布局中声明的每个变量生成setter和getter方法。这些变量接受默认的托管代码值，直到setter被调用，引用类型为null, int为0，布尔值为false，等等。
 
 将生成一个名为context的特殊变量，以便根据需要在绑定表达式中使用。context的值是根视图的getContext()方法中的上下文对象。上下文变量被具有该名称的显式变量声明覆盖。
 
@@ -541,32 +550,623 @@ android:onClick="@{(v) -> v.isVisible() ? doSomething() : void}"
 
 ### 使用可观察的数据对象
 
+数据绑定库提供了类和方法来方便地观察数据的变化。当底层数据源发生更改时，您不必担心刷新UI。你可以使你的变量或它们的性质可见。库允许您使对象、字段或集合成为可观察的。
+
+任何普通对象都可以用于数据绑定，但是修改对象不会自动导致UI更新。数据绑定可用于使数据对象能够在其数据发生更改时通知其他对象(称为侦听器)。有三种不同类型的可观察类:对象、字段和集合。
+
+#### 可观察对象
+
+实现了Observable接口的类允许注册侦听器，侦听器希望在Observable对象的属性更改时得到通知。
+
+Observable接口有一个添加和删除侦听器的机制，但是必须决定何时发送通知。为了简化开发，数据绑定库提供了BaseObservable类，它实现了侦听器注册机制。
+实现BaseObservable的数据类负责在属性发生更改时通知。这是通过为getter分配一个可绑定的注释，并在setter中调用notifyPropertyChanged()方法来实现的，如下面的示例所示:
+
+```
+private static class User extends BaseObservable {
+    private String firstName;
+    private String lastName;
+
+    @Bindable
+    public String getFirstName() {
+        return this.firstName;
+    }
+
+    @Bindable
+    public String getLastName() {
+        return this.lastName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+        notifyPropertyChanged(BR.firstName);
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+        notifyPropertyChanged(BR.lastName);
+    }
+}
+```
+
+数据绑定在模块包中生成一个名为BR的类，其中包含用于数据绑定的资源的id。可绑定注释在编译期间在BR类文件中生成一个条目。
+如果数据类的基类无法更改，则可以使用PropertyChangeRegistry对象实现可观察接口，以便有效地注册和通知侦听器。
+
+#### 可观察的字段
+
+创建实现Observable接口的类涉及到一些工作，如果类只有几个属性，那么这些工作就不值得。在这种情况下，您可以使用通用的Observable类和以下特定于原语的类使字段成为可观察的:
+
+* ObservableBoolean
+* ObservableByte
+* ObservableChar
+* ObservableShort
+* ObservableInt
+* ObservableLong
+* ObservableFloat
+* ObservableDouble
+* ObservableParcelable
+
+可观察字段是包含一个字段的可观察对象。原始版本在访问操作期间避免装箱和解箱。
+要使用这种机制，可以在Java编程语言中创建一个`public final`属性，或者在Kotlin中创建一个只读属性，如下面的示例所示:
+
+```
+private static class User {
+    public final ObservableField<String> firstName = new ObservableField<>();
+    public final ObservableField<String> lastName = new ObservableField<>();
+    public final ObservableInt age = new ObservableInt();
+}
+```
+
+要访问字段值，使用set()和get()访问器方法，如下所示:
+
+```
+user.firstName.set("Google");
+int age = user.age.get();
+```
+
+> **注意**：Android Studio 3.1及更高版本允许您用LiveData对象替换可观察字段，这为您的应用程序提供了额外的好处。
+
+#### 可观察的集合
+
+一些应用程序使用动态结构来保存数据。可观察的集合允许使用键访问这些结构。当键是引用类型(如String)时，ObservableArrayMap类很有用，如下面的例子所示:
+
+```
+ObservableArrayMap<String, Object> user = new ObservableArrayMap<>();
+user.put("firstName", "Google");
+user.put("lastName", "Inc.");
+user.put("age", 17);
+```
+
+在布局中，可以使用字符串键找到map，如下图所示:
+
+```
+<data>
+    <import type="android.databinding.ObservableMap"/>
+    <variable name="user" type="ObservableMap<String, Object>"/>
+</data>
+…
+<TextView
+    android:text="@{user.lastName}"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"/>
+<TextView
+    android:text="@{String.valueOf(1 + (Integer)user.age)}"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"/>
+```
+
+当键为整数时，ObservableArrayList类很有用，如下所示:
+
+```
+ObservableArrayList<Object> user = new ObservableArrayList<>();
+user.add("Google");
+user.add("Inc.");
+user.add(17);
+```
+
+在布局中，可以通过索引访问列表，如下例所示:
+
+```
+<data>
+    <import type="android.databinding.ObservableList"/>
+    <import type="com.example.my.app.Fields"/>
+    <variable name="user" type="ObservableList<Object>"/>
+</data>
+…
+<TextView
+    android:text='@{user[Fields.LAST_NAME]}'
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"/>
+<TextView
+    android:text='@{String.valueOf(1 + (Integer)user[Fields.AGE])}'
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"/>
+```
+
 ### 生成的绑定类
+
+数据绑定库生成绑定类，用于访问布局的变量和视图。生成的绑定类将布局变量与布局中的视图链接起来。绑定类的名称和包可以定制。所有生成的绑定类都继承自ViewDataBinding类。
+
+#### 创建绑定对象
+
+绑定对象应该在扩展布局之后立即创建，以确保视图层次结构在绑定到布局中包含表达式的视图之前没有被修改。将对象绑定到布局的最常见方法是使用绑定类上的静态方法。
+您可以使用binding类的inflation()方法扩展视图层次结构并将对象绑定到它，如下面的示例所示:
+
+```
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    MyLayoutBinding binding = MyLayoutBinding.inflate(getLayoutInflater());
+}
+```
+
+除了LayoutInflater对象之外，还有另一个版本的inflater()方法接受ViewGroup对象，如下面的示例所示:
+
+```
+MyLayoutBinding binding = MyLayoutBinding.inflate(getLayoutInflater(), viewGroup, false);
+```
+
+如果使用不同的机制对布局进行扩展，则可以单独绑定，如下:
+
+```
+MyLayoutBinding binding = MyLayoutBinding.bind(viewRoot);
+```
+有时绑定类型不能预先知道。在这种情况下，可以使用DataBindingUtil类创建绑定，如下面的代码片段所示:
+
+```
+View viewRoot = LayoutInflater.from(this).inflate(layoutId, parent, attachToParent);
+ViewDataBinding binding = DataBindingUtil.bind(viewRoot);
+```
+
+TODO
+
+#### ViewStubs
+
+与普通视图不同，ViewStub对象从一个不可见的视图开始。当它们被显示或被明确告知要展示时，它们会通过展示另一个布局来替换它们自己。
+
+因为它ViewStub基本上从视图层次结构中消失，所以绑定对象中的视图也必须消失以允许通过垃圾回收声明。
+因为视图是最终的，所以ViewStubProxy对象代替生成的绑定类中的ViewStub，使您在ViewStub存在时可以访问它，并且还可以在展示时访问ViewStub的视图层次结构。
+
+在展示另一个布局时，必须为新布局建立绑定。因此，ViewStubProxy必须在必要时监听ViewStub OnInflateListener并建立绑定。
+由于在给定的时间内只能存在一个侦听器，因此ViewStubProxy允许您设置OnInflateListener，它在建立绑定之后调用OnInflateListener。
+
+#### 立即绑定
+
+当一个变量或可观察对象发生变化时，绑定计划在下一帧之前更改。但是，有时必须立即执行绑定。要强制执行，请使用executePendingBindings()方法。
+
+#### 动态变量
+
+有时，特定的绑定类是未知的。例如，RecyclerView.Adapter针对任意布局的操作不知道特定的绑定类。它仍然必须在调用onBindViewHolder()方法期间分配绑定值。
+
+在以下示例中，RecyclerView绑定的所有布局都具有 item变量。该BindingHolder对象有一个getBinding()返回ViewDataBinding基类的方法 。
+
+```
+public void onBindViewHolder(BindingHolder holder, int position) {
+    final T item = items.get(position);
+    holder.getBinding().setVariable(BR.item, item);
+    holder.getBinding().executePendingBindings();
+}
+```
+
+> 注意:数据绑定库在模块包中生成一个名为BR的类，该类包含用于数据绑定的资源的ID。在上面的示例中，库自动生成BR.item变量。
+
+> 您可以在后台线程中更改数据模型，只要它不是集合即可。数据绑定在计算期间本地化每个变量/字段以避免任何并发问题。
+
+#### 自定义绑定类名称
+
+默认情况下，绑定类是基于布局文件的名称生成的，以大写字母开始，删除下划线(_)，将后面的字母大写，并添加Binding后缀。该类放在模块包下的databinding包中。
+例如，布局文件 contact_item.xml生成ContactItemBinding类。如果模块包是com.example.my.app，则绑定类放在 com.example.my.app.databinding包中。
+
+绑定类可以通过调整数据元素的class属性来重命名或放在不同的包中。例如，下面的布局在当前模块的databinding包中生成ContactItem绑定类:
+
+```
+<data class="ContactItem">
+    …
+</data>
+```
+
+通过在类名前面加上句号，可以在不同的包中生成绑定类。下面的示例在模块包中生成绑定类:
+
+```
+<data class=".ContactItem">
+    …
+</data>
+```
+
+您还可以在希望生成绑定类的地方使用完整的包名。下面的示例在com.example包创建ContactItem绑定类：
+
+```
+<data class="com.example.ContactItem">
+    …
+</data>
+```
 
 ### 绑定适配器
 
+对于每个布局表达式，都有一个绑定适配器，用于进行设置相应属性或侦听器所需的框架调用。
+例如，绑定适配器可以调用setText()方法来设置文本属性，或者调用setOnClickListener()方法来向click事件添加侦听器。
+最常见的绑定适配器，如本页示例中使用的android:text属性的适配器，可供您在android.databinding.adapters包中使用。
+您还可以创建自定义适配器，如下面的示例所示:
+
+```
+@BindingAdapter("app:goneUnless")
+public static void goneUnless(View view, Boolean visible) {
+  view.visibility = visible ? View.VISIBLE : View.GONE;
+}
+```
+
+绑定适配器负责进行适当的框架调用来设置值。一个例子是设置一个属性值，比如调用setText()方法。另一个例子是设置一个事件监听器，比如调用setOnClickListener()方法。
+
+数据绑定库允许您指定调用的方法来设置值，提供自己的绑定逻辑，并使用适配器指定返回对象的类型。
+
+#### 设置属性值
+
+每当绑定值发生更改时，生成的绑定类必须使用绑定表达式调用视图上的setter方法。您可以允许数据绑定库自动确定方法、显式声明方法或提供自定义逻辑来选择方法。
+
+##### 自动方法选择
+
+对于名为example的属性，库会自动尝试找到接受兼容类型作为参数的方法setExample(arg)。不考虑属性的命名空间，只在搜索方法时使用属性名和类型。
+
+例如，给定android:text="@{user.name}"表达式，库查找一个setText(arg)方法，该方法接受user.getName()返回的类型。
+如果user.getName()的返回类型是String，则库将查找接受字符串参数的setText()方法。
+如果表达式返回int，则库将搜索接受int参数的setText()方法。表达式必须返回正确的类型，如果需要，可以转换返回值。
+
+即使给定名称中不存在属性，数据绑定也可以工作。然后可以使用数据绑定为任何setter创建属性。例如，支持类DrawerLayout没有任何属性，但是有很多setter。
+以下布局分别自动使用setScrimColor(int)和setDrawerListener(DrawerListener)方法作为app:scrimColor和app:drawerListener属性的setter ：
+
+```
+<android.support.v4.widget.DrawerLayout
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    app:scrimColor="@{@color/scrim}"
+    app:drawerListener="@{fragment.drawerListener}">
+```
+
+##### 指定自定义方法名称
+
+有些属性的setter方法与名称不匹配。在这些情况下，属性可以使用BindingMethods注释与setter关联。
+注释与类一起使用，可以包含多个 BindingMethod注释，每个注释方法一个注释。
+绑定方法是可以添加到应用程序中的任何类的注释。在下面的示例中，android:tint属性与setImageTintList(ColorStateList)方法关联，而不是与setTint()方法关联:
+
+```
+@BindingMethods({
+       @BindingMethod(type = "android.widget.ImageView",
+                      attribute = "android:tint",
+                      method = "setImageTintList"),
+})
+```
+
+大多数情况下，您不需要在Android框架类中重命名setter。属性已经使用名称约定实现，用于自动查找匹配方法。
+
+##### 提供自定义逻辑
+
+有些属性需要自定义绑定逻辑。例如，android:paddingLeft属性没有关联的setter。而是提供setPadding(left, top, right, bottom)方法。
+带有BindingAdapter注释的静态绑定适配器方法允许您自定义如何调用属性的setter。
+
+Android框架类的属性已经创建了BindingAdapter注释。例如，下面的例子显示了paddingLeft属性的绑定适配器:
+
+```
+@BindingAdapter("android:paddingLeft")
+public static void setPaddingLeft(View view, int padding) {
+  view.setPadding(padding,
+                  view.getPaddingTop(),
+                  view.getPaddingRight(),
+                  view.getPaddingBottom());
+}
+```
+
+参数类型很重要。第一个参数确定与属性关联的视图的类型。第二个参数确定给定属性的绑定表达式中接受的类型。
+
+绑定适配器对于其他类型的定制非常有用。例如，可以从工作线程调用自定义加载器来加载图像。
+
+当存在冲突时，您定义的绑定适配器将覆盖Android框架提供的默认适配器。
+
+您还可以拥有接收多个属性的适配器，如下面的示例所示:
+
+```
+@BindingAdapter({"imageUrl", "error"})
+public static void loadImage(ImageView view, String url, Drawable error) {
+  Picasso.get().load(url).error(error).into(view);
+}
+```
+
+您可以在布局中使用适配器，如下面的示例所示。注意，@drawable/venueError引用了应用程序中的资源。在资源周围加上@{}使其成为一个有效的绑定表达式。
+
+```
+<ImageView app:imageUrl="@{venue.imageUrl}" app:error="@{@drawable/venueError}" />
+```
+
+> **注意**：数据绑定库会忽略自定义命名空间以进行匹配。
+
+如果imageUrl和error都用于ImageView对象，并且imageUrl是字符串，error是可绘制的，则调用适配器。
+如果您希望在设置任何属性时调用适配器，可以将适配器的可选requireAll标志设置为false，如下面的示例所示:
+
+```
+@BindingAdapter(value={"imageUrl", "placeholder"}, requireAll=false)
+public static void setImageUrl(ImageView imageView, String url, Drawable placeHolder) {
+  if (url == null) {
+    imageView.setImageDrawable(placeholder);
+  } else {
+    MyImageLoader.loadInto(imageView, url, placeholder);
+  }
+}
+```
+
+> **注意**：当存在冲突时，绑定适配器将覆盖默认的数据绑定适配器。
+
+绑定适配器方法可以选择在其处理程序中接受旧值。获取新旧值的方法应该首先声明属性的所有旧值，然后是新值，如下例所示:
+
+```
+@BindingAdapter("android:paddingLeft")
+public static void setPaddingLeft(View view, int oldPadding, int newPadding) {
+  if (oldPadding != newPadding) {
+      view.setPadding(newPadding,
+                      view.getPaddingTop(),
+                      view.getPaddingRight(),
+                      view.getPaddingBottom());
+   }
+}
+```
+
+事件处理程序只能与一个抽象方法的接口或抽象类一起使用，如下例所示:
+
+```
+@BindingAdapter("android:onLayoutChange")
+public static void setOnLayoutChangeListener(View view, View.OnLayoutChangeListener oldValue,
+       View.OnLayoutChangeListener newValue) {
+  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+    if (oldValue != null) {
+      view.removeOnLayoutChangeListener(oldValue);
+    }
+    if (newValue != null) {
+      view.addOnLayoutChangeListener(newValue);
+    }
+  }
+}
+```
+
+在布局中使用此事件处理程序，如下所示：
+
+```
+<View android:onLayoutChange="@{() -> handler.layoutChanged()}"/>
+```
+
+侦听器有多个方法时，必须将其拆分为多个侦听器。例如，View.OnAttachStateChangeListener有两种方法：onViewAttachedToWindow(View)和onViewDetachedFromWindow(View)。
+该库提供了两个接口来区分它们的属性和处理程序：
+
+```
+@TargetApi(VERSION_CODES.HONEYCOMB_MR1)
+public interface OnViewDetachedFromWindow {
+  void onViewDetachedFromWindow(View v);
+}
+
+@TargetApi(VERSION_CODES.HONEYCOMB_MR1)
+public interface OnViewAttachedToWindow {
+  void onViewAttachedToWindow(View v);
+}
+```
+
+因为更改一个侦听器也会影响另一个侦听器，所以需要一个适用于任一属性或适用于两者的适配器。
+您可以在注释中设置 requireAll 为false指定不是必须为每个属性分配绑定表达式，如以下示例所示：
+
+```
+@BindingAdapter({"android:onViewDetachedFromWindow", "android:onViewAttachedToWindow"}, requireAll=false)
+public static void setListener(View view, OnViewDetachedFromWindow detach, OnViewAttachedToWindow attach) {
+    if (VERSION.SDK_INT >= VERSION_CODES.HONEYCOMB_MR1) {
+        OnAttachStateChangeListener newListener;
+        if (detach == null && attach == null) {
+            newListener = null;
+        } else {
+            newListener = new OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View v) {
+                    if (attach != null) {
+                        attach.onViewAttachedToWindow(v);
+                    }
+                }
+                @Override
+                public void onViewDetachedFromWindow(View v) {
+                    if (detach != null) {
+                        detach.onViewDetachedFromWindow(v);
+                    }
+                }
+            };
+        }
+
+        OnAttachStateChangeListener oldListener = ListenerUtil.trackListener(view, newListener,
+                R.id.onAttachStateChangeListener);
+        if (oldListener != null) {
+            view.removeOnAttachStateChangeListener(oldListener);
+        }
+        if (newListener != null) {
+            view.addOnAttachStateChangeListener(newListener);
+        }
+    }
+}
+```
+
+上面的示例比正常情况稍微复杂一些，因为View类使用addOnAttachStateChangeListener()和removeOnAttachStateChangeListener()方法，
+而不是OnAttachStateChangeListener的setter方法。android.databinding.adapters.ListenerUtil类帮助跟踪以前的侦听器，以便在绑定适配器中删除它们。
+
+通过使用@TargetApi(VERSION_CODES.HONEYCOMB_MR1)注释OnViewDetachedFromWindow和OnViewAttachedToWindow接口，
+数据绑定代码生成器知道侦听器只应该在运行于Android 3.1 (API级别12)或更高版本时生成，而addOnAttachStateChangeListener()方法支持相同的版本。
+
+#### 对象转换
+
+##### 自动对象转换
+
+当从绑定表达式返回Object时，库选择用于设置属性值的方法。Object被转换为所选方法的参数类型。这种行为在使用ObservableMap类存储数据的应用程序中很方便，如下面的例子所示:
+
+```
+<TextView
+   android:text='@{userMap["lastName"]}'
+   android:layout_width="wrap_content"
+   android:layout_height="wrap_content" />
+```
+
+> **注意**：您还可以使用object.key表示引用map中的值。例如，@{userMap["lastName"]}在上面的例子中可以替换为 @{userMap.lastName}。
+
+表达式中的userMap对象返回一个值，该值自动转换为setText(CharSequence)方法中找到的参数类型，该方法用于设置android:text属性的值。
+如果参数类型不明确，则必须在表达式中转换返回类型。
+
+##### 自定义转化
+
+在某些情况下，特定类型之间需要自定义转换。例如，android:background视图的属性需要一个Drawable，但是指定的颜色值是一个整数。
+下面的例子显示了一个属性，它期望一个Drawable，但是提供了一个整数:
+
+```
+<View
+   android:background="@{isError ? @color/red : @color/white}"
+   android:layout_width="wrap_content"
+   android:layout_height="wrap_content"/>
+```
+
+无论何时需要Drawable并返回一个整数，都应该将int转换为ColorDrawable。转换可以使用带有BindingConversion注释的静态方法完成，如下所示:
+
+```
+@BindingConversion
+public static ColorDrawable convertColorToDrawable(int color) {
+    return new ColorDrawable(color);
+}
+```
+
+但是，绑定表达式中提供的值类型必须是一致的。你不能在同一个表达式中使用不同的类型，如下面的例子所示:
+
+```
+<View
+   android:background="@{isError ? @drawable/error : @color/white}"
+   android:layout_width="wrap_content"
+   android:layout_height="wrap_content"/>
+```
+
 ### 将布局视图绑定到体系结构组件
+
+AndroidX库包含体系结构组件，您可以使用这些组件设计健壮、可测试和可维护的应用程序。数据绑定库与体系结构组件无缝协作，从而进一步简化UI的开发。
+应用程序中的布局可以绑定到体系结构组件中的数据，这些组件已经帮助您管理UI控制器的生命周期，并通知数据中的更改。
+
+#### 使用LiveData通知UI有关数据更改的信息
+
+您可以使用LiveData对象作为数据绑定源来自动通知UI有关数据更改的信息。有关此体系结构组件的更多信息，请参阅LiveData(live_data.md)。
+
+与实现可观察对象(如可观察字段)不同，LiveData对象知道订阅数据更改的观察者的生命周期。
+这些知识带来了许多好处，这些好处可以在使用LiveData的优点中得到解释。在Android Studio 3.1或更高版本中，可以用数据绑定代码中的LiveData对象替换可观察字段。
+
+要将LiveData对象与绑定类一起使用，需要指定生命周期所有者以定义LiveData对象的范围。以下示例在实例化绑定类之后将活动指定为生命周期所有者：
+
+```
+class ViewModelActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        // Inflate view and obtain an instance of the binding class.
+        UserBinding binding = DataBindingUtil.setContentView(this, R.layout.user);
+
+        // Specify the current activity as the lifecycle owner.
+        binding.setLifecycleOwner(this);
+    }
+}
+```
+
+您可以使用ViewModel 组件（如[使用ViewModel管理与UI相关的数据](#使用ViewModel管理与UI相关的数据)）将数据绑定到布局。
+在ViewModel组件中，您可以使用该LiveData对象转换数据或合并多个数据源。下面的例子展示了如何在ViewModel中转换数据:
+
+```
+class ScheduleViewModel extends ViewModel {
+    LiveData username;
+
+    public ScheduleViewModel() {
+        String result = Repository.userName;
+        userName = Transformations.map(result, result -> result.value);
+    }
+}
+```
+
+#### 使用ViewModel管理与UI相关的数据
+
+数据绑定库与ViewModel组件无缝协作，组件公开布局观察到的数据并对其更改做出反应。通过使用ViewModel数据绑定库中的组件，您可以将UI逻辑从布局移动到组件中，这些组件更易于测试。
+数据绑定库可确保在需要时绑定和取消绑定数据源。剩下的大部分工作都在于确保您公开正确的数据。有关此体系结构组件的更多信息，请参阅[ViewModel](view_model.md)。
+
+要将ViewModel组件与数据绑定库一起使用，必须实例化从ViewModel类继承的组件，获取绑定类的实例，并将ViewModel组件分配给绑定类中的属性。以下示例显示如何将该组件与库一起使用：
+
+```
+class ViewModelActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        // Obtain the ViewModel component.
+        UserModel userModel = ViewModelProviders.of(getActivity()).get(UserModel.class);
+
+        // Inflate view and obtain an instance of the binding class.
+        UserBinding binding = DataBindingUtil.setContentView(this, R.layout.user);
+
+        // Assign the component to a property in the binding class.
+        binding.userModel = userModel;
+    }
+}
+```
+
+在布局中，ViewModel使用绑定表达式将组件的属性和方法分配给相应的视图，如以下示例所示：
+
+```
+<CheckBox
+    android:id="@+id/rememberMeCheckBox"
+    android:checked="@{userModel.rememberMe}"
+    android:onCheckedChanged="@{() -> userModel.rememberMeChanged()}" />
+```
+
+#### 使用ObservableViewModel可以更好地控制绑定适配器
+
+您可以使用实现了Observable的ViewModel组件通知其他应用程序组件数据中的更改，类似于您使用LiveData对象的方式。
+
+在某些情况下，即使失去了LiveData的生命周期管理功能，您也可能宁愿使用实现Observable接口的ViewModel组件，而不是使用LiveData对象。
+使用ViewModel实现的组件Observable可以更好地控制应用程序中的绑定适配器。例如，此模式使您可以在数据更改时更好地控制通知，还允许您指定自定义方法以在双向数据绑定中设置属性的值。
+
+要实现一个可观察的ViewModel组件，您必须创建一个继承自ViewModel类并实现Observable接口的类。
+当观察者使用addOnPropertyChangedCallback() 和 removeOnPropertyChangedCallback() 方法订阅或取消订阅通知时，您可以提供自定义逻辑。
+您还可以提供当notifyPropertyChanged()方法中属性更改时运行的自定义逻辑。以下代码示例演示如何实现Observable ViewModel：
+
+```
+/**
+ * A ViewModel that is also an Observable,
+ * to be used with the Data Binding Library.
+ */
+class ObservableViewModel extends ViewModel implements Observable {
+    private PropertyChangeRegistry callbacks = new PropertyChangeRegistry();
+
+    @Override
+    protected void addOnPropertyChangedCallback(
+            Observable.OnPropertyChangedCallback callback) {
+        callbacks.add(callback);
+    }
+
+    @Override
+    protected void removeOnPropertyChangedCallback(
+            Observable.OnPropertyChangedCallback callback) {
+        callbacks.remove(callback);
+    }
+
+    /**
+     * Notifies observers that all properties of this instance have changed.
+     */
+    void notifyChange() {
+        callbacks.notifyCallbacks(this, 0, null);
+    }
+
+    /**
+     * Notifies observers that a specific property has changed. The getter for the
+     * property that changes should be marked with the @Bindable annotation to
+     * generate a field in the BR class to be used as the fieldId parameter.
+     *
+     * @param fieldId The generated BR id for the Bindable field.
+     */
+    void notifyPropertyChanged(int fieldId) {
+        callbacks.notifyCallbacks(this, fieldId, null);
+    }
+}
+```
 
 ### 双向数据绑定
 
+数据绑定库支持双向数据绑定。用于此类绑定的表示法支持接收对属性的数据更改并同时侦听用户对该属性的更新。
 
 
 
-* 数据绑定库提供了类和方法来方便地观察数据的变化。当底层数据源发生更改时，您不必担心刷新UI。你可以使你的变量或它们的性质可见。库允许您使对象、字段或集合成为可观察的。
 
-* 数据绑定库生成绑定类，用于访问布局的变量和视图。这个页面向您展示了如何使用和自定义生成的绑定类。
 
-* 对于每个布局表达式，都有一个绑定适配器，用于进行设置相应属性或侦听器所需的框架调用。例如，绑定适配器可以调用setText()方法来设置文本属性，或者调用setOnClickListener()方法来向click事件添加侦听器。
-  最常见的绑定适配器，如本页示例中使用的android:text属性的适配器，可供您在android.databinding.adapters包中使用。
-  有关公共绑定适配器的列表，请参见适配器。您还可以创建自定义适配器，如下面的示例所示:
-
-  ```
-  @BindingAdapter("app:goneUnless")
-  public static void goneUnless(View view, Boolean visible) {
-      view.visibility = visible ? View.VISIBLE : View.GONE;
-  }
-  ```
-
-* Android支持库包含架构组件，您可以使用它来设计健壮，可测试和可维护的应用程序。您可以将架构组件与数据绑定库一起使用来进一步简化UI的开发。
-
-* 数据绑定库支持双向数据绑定。用于此类绑定的表示法支持接收对属性的数据更改并同时侦听用户对该属性的更新。
