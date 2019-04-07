@@ -179,6 +179,206 @@ Room持久性库支持可观察的查询，这些查询返回LiveData对象。�
 
 ## 扩展LiveData
 
+如果观察者的生命周期处于STARTED或RESUMED状态，LiveData认为观察者处于活动状态，下面的示例代码演示了如何扩展LiveData类:
+
+```
+public class StockLiveData extends LiveData<BigDecimal> {
+    private StockManager stockManager;
+
+    private SimplePriceListener listener = new SimplePriceListener() {
+        @Override
+        public void onPriceChanged(BigDecimal price) {
+            setValue(price);
+        }
+    };
+
+    public StockLiveData(String symbol) {
+        stockManager = new StockManager(symbol);
+    }
+
+    @Override
+    protected void onActive() {
+        stockManager.requestPriceUpdates(listener);
+    }
+
+    @Override
+    protected void onInactive() {
+        stockManager.removeUpdates(listener);
+    }
+}
+```
+
+此示例中价格监听器的实现包括以下重要方法：
+
+* 当LiveData对象具有活动观察者时，将调用onActive()方法。这意味着您需要开始从该方法观察股票价格更新。
+* 当LiveData对象没有任何活动的观察者时，将调用onInactive()方法。因为没有观察者在听，所以没有理由保持与StockManager服务的连接。
+* setValue(T)方法更新LiveData实例的值，并将更改通知任何活动的观察者。
+
+您可以使用StockLiveData类如下:
+
+```
+public class MyFragment extends Fragment {
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+        LiveData<BigDecimal> myPriceListener = ...;
+        myPriceListener.observe(this, price -> {
+            // Update the UI.
+        });
+    }
+}
+```
+
+方法将fragment(它是LifecycleOwner的一个实例)作为第一个参数传递。这样做意味着这个观察者被绑定到与所有者关联的Lifecycle对象上，这意味着:
+
+* 如果Lifecycle对象没有处于活动状态，那么即使值发生了更改，也不会调用观察者。
+* 毁生命周期对象后，将自动删除观察者。
+
+LiveData对象具有生命周期感知这一事实意味着您可以在多个活动，片段和服务之间共享它们。为了简化示例，您可以将LiveData类实现为单例，如下所示：
+
+```
+public class StockLiveData extends LiveData<BigDecimal> {
+    private static StockLiveData sInstance;
+    private StockManager stockManager;
+
+    private SimplePriceListener listener = new SimplePriceListener() {
+        @Override
+        public void onPriceChanged(BigDecimal price) {
+            setValue(price);
+        }
+    };
+
+    @MainThread
+    public static StockLiveData get(String symbol) {
+        if (sInstance == null) {
+            sInstance = new StockLiveData(symbol);
+        }
+        return sInstance;
+    }
+
+    private StockLiveData(String symbol) {
+        stockManager = new StockManager(symbol);
+    }
+
+    @Override
+    protected void onActive() {
+        stockManager.requestPriceUpdates(listener);
+    }
+
+    @Override
+    protected void onInactive() {
+        stockManager.removeUpdates(listener);
+    }
+}
+```
+
+您可以在片段中使用它，如下所示：
+
+```
+public class MyFragment extends Fragment {
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        StockLiveData.get(symbol).observe(this, price -> {
+            // Update the UI.
+        });
+    }
+}
+```
+
+多个片段和活动可以观察MyPriceListener实例。LiveData仅在系统服务中的一个或多个可见且处于活动状态时才连接到系统服务。
+
+
 ## 转换LiveData
 
+您可能希望在将LiveData对象分发给观察者之前对其中存储的值进行更改，或者您可能需要LiveData根据另一个实例的值返回其他实例。
+该Lifecycle包提供了Transformations包含支持这些方案的辅助方法的类。
+
+### Transformations.map()
+
+对存储在LiveData对象中的值应用函数，并将结果传播到下游。
+
+```
+LiveData<User> userLiveData = ...;
+LiveData<String> userName = Transformations.map(userLiveData, user -> {
+    user.name + " " + user.lastName
+});
+```
+
+### Transformations.switchMap()
+
+类似于map()，将函数应用于存储在LiveData 对象中的值，并将结果解包并调度到下游。传递给的函数switchMap()必须返回一个LiveData对象，如下例所示：
+
+```
+private LiveData<User> getUser(String id) {
+  ...;
+}
+
+LiveData<String> userId = ...;
+LiveData<User> user = Transformations.switchMap(userId, id -> getUser(id) );
+```
+
+您可以使用转换方法在观察者的生命周期中传递信息。除非观察者正在观察返回的LiveData对象，否则不会计算变换。
+由于转换是延迟计算的，因此生命周期相关的行为会被隐式传递下去，而不需要额外的显式调用或依赖项。
+
+如果您认为在ViewModel对象中需要一个Lifecycle对象，那么转换可能是一个更好的解决方案。例如，假设您有一个UI组件，它接受一个地址并返回该地址的邮政编码。
+您可以为这个组件实现简单的视图模型，如下面的示例代码所示:
+
+```
+class MyViewModel extends ViewModel {
+    private final PostalCodeRepository repository;
+    public MyViewModel(PostalCodeRepository repository) {
+       this.repository = repository;
+    }
+
+    private LiveData<String> getPostalCode(String address) {
+       // DON'T DO THIS
+       return repository.getPostCode(address);
+    }
+}
+```
+
+然后，UI组件需要从以前的LiveData对象注销注册，并在每次调用getPostalCode()时注册到新实例。
+此外，如果重新创建UI组件，它将触发对repository.getPostCode()方法的另一个调用，而不是使用前一个调用的结果。
+
+相反，您可以将邮政编码查询实现为地址输入的转换，如下面的示例所示:
+
+```
+class MyViewModel extends ViewModel {
+    private final PostalCodeRepository repository;
+    private final MutableLiveData<String> addressInput = new MutableLiveData();
+    public final LiveData<String> postalCode =
+            Transformations.switchMap(addressInput, (address) -> {
+                return repository.getPostCode(address);
+             });
+
+  public MyViewModel(PostalCodeRepository repository) {
+      this.repository = repository
+  }
+
+  private void setInput(String address) {
+      addressInput.setValue(address);
+  }
+}
+```
+
+在本例中，postalCode字段被定义为addressInput的转换。只要您的应用程序有一个与postalCode字段关联的活动观察者，每当addressInput发生更改时，就会重新计算和检索字段的值。
+
+这种机制允许较低级别的应用程序创建按需延迟计算的LiveData对象。ViewModel对象可以很容易地获得对LiveData对象的引用，然后在其上定义转换规则。
+
+### 创建新的转换
+
+在您的应用程序中，有十几个不同的特定转换可能有用，但它们不是默认提供的。要实现自己的转换，可以使用MediatorLiveData类，它侦听其他LiveData对象并处理它们发出的事件。
+MediatorLiveData正确地将其状态传播到源LiveData对象。要了解关于此模式的更多信息，请参阅
+[Transformations](https://developer.android.google.cn/reference/android/arch/lifecycle/Transformations.html)类的参考文档。
+
+
 ## 合并多个LiveData
+
+MediatorLiveData是一个子类LiveData，允许您合并多个LiveData源。MediatorLiveData 只要任何原始LiveData源对象发生更改，就会触发对象的观察者。
+
+例如，如果LiveDataUI中有一个可以从本地数据库或网络更新的对象，则可以将以下源添加到该 MediatorLiveData对象：
+
+* LiveData与存储在数据库中的数据关联的对象。
+* LiveData与从网络访问的数据关联的对象。
+
+您的活动只需要观察MediatorLiveData对象以从两个来源接收更新。
