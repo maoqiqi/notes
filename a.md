@@ -1166,7 +1166,142 @@ class ObservableViewModel extends ViewModel implements Observable {
 
 数据绑定库支持双向数据绑定。用于此类绑定的表示法支持接收对属性的数据更改并同时侦听用户对该属性的更新。
 
+使用单向数据绑定，您可以在属性上设置值，并设置对该属性中的更改作出反应的侦听器：
 
+```
+<CheckBox
+    android:id="@+id/rememberMeCheckBox"
+    android:checked="@{viewModel.rememberMe}"
+    android:onCheckedChanged="@{viewModel.rememberMeChanged}"
+/>
+```
 
+双向数据绑定提供了此过程的快捷方式：
 
+```
+<CheckBox
+    android:id="@+id/rememberMeCheckBox"
+    android:checked="@={viewmodel.rememberMe}"
+/>
+```
 
+@={}符号(重要的是包含“=”符号)接收对属性的数据更改，同时侦听用户更新。
+
+为了对备份数据的变化做出反应，可以将布局变量设置为Observable的实现，通常是BaseObservable，并使用@Bindable注释，如下面的代码片段所示:
+
+```
+public class LoginViewModel extends BaseObservable {
+    // private Model data = ...
+
+    @Bindable
+    public Boolean getRememberMe() {
+        return data.rememberMe;
+    }
+
+    public void setRememberMe(Boolean value) {
+        // Avoids infinite loops.
+        if (data.rememberMe != value) {
+            data.rememberMe = value;
+
+            // React to the change.
+            saveData();
+
+            // Notify observers of a new value.
+            notifyPropertyChanged(BR.remember_me);
+        }
+    }
+}
+```
+
+因为bindable属性的getter方法被称为getRememberMe()，所以属性对应的setter方法自动使用setRememberMe()这个名称。
+
+#### 使用自定义属性进行双向数据绑定
+
+该平台为最常见的双向属性和更改侦听器提供双向数据绑定实现，您可以将其用作应用程序的一部分。
+如果要对自定义属性使用双向数据绑定，则需要使用 @InverseBindingAdapter 和 @InverseBindingMethod 注释。
+
+例如，如果您想在名为MyView的自定义视图中启用对“time”属性的双向数据绑定，请完成以下步骤:
+
+1. 注释设置初始值的方法，并在值更改时使用@BindingAdapter进行更新:
+
+```
+@BindingAdapter("time")
+public static void setTime(MyView view, Time newValue) {
+    // Important to break potential infinite loops.
+    if (view.time != newValue) {
+        view.time = newValue;
+    }
+}
+```
+
+2. 使用@InverseBindingAdapter方法注释从视图中读取值:
+
+```
+@InverseBindingAdapter("time")
+public static Time getTime(MyView view) {
+    return view.getTime();
+}
+```
+
+此时，数据绑定知道当数据发生更改时应该做什么(它调用@BindingAdapter注释的方法)，以及当视图属性发生更改时应该调用什么(它调用InverseBindingListener)。
+但是，它不知道属性何时或如何更改。
+
+为此，您需要在视图上设置一个侦听器。它可以是与自定义视图关联的自定义侦听器，也可以是通用事件，例如焦点丢失或文本更改。
+将@BindingAdapter注释添加到方法中，该方法为属性的更改设置侦听器:
+
+```
+@BindingAdapter("app:timeAttrChanged")
+public static void setListeners(MyView view, final InverseBindingListener attrChange) {
+    // Set a listener for click, focus, touch, etc.
+}
+```
+
+侦听器包含一个InverseBindingListener作为参数。使用InverseBindingListener告诉数据绑定系统属性已经更改。然后，系统可以开始调用使用@InverseBindingAdapter等注释的方法。
+
+> **注意**：每个双向绑定都会生成一个合成事件属性。此属性与基本属性具有相同的名称，但它包含后缀 "AttrChanged"。
+合成事件属性允许库创建一个使用@BindingAdapter注释的方法，以将事件侦听器关联到适当的视图实例。
+
+实际上，这个侦听器包含一些重要的逻辑，包括用于单向数据绑定的侦听器。例如，要查看文本属性更改的适配器TextViewBindingAdapter。
+
+#### 转换器
+
+如果绑定到View对象的变量需要在显示之前以某种方式进行格式化，翻译或更改，则可以使用Converter对象。
+
+例如，获取EditText显示日期的对象：
+
+```
+<EditText
+    android:id="@+id/birth_date"
+    android:text="@={Converter.dateToString(viewModel.birthDate)}"
+/>
+```
+
+该viewModel.birthDate属性包含一个Long类型的值，因此需要使用转换器对其进行格式化。
+
+因为使用了双向表达式，所以还需要一个反向转换器，让库知道如何将用户提供的字符串转换回支持数据类型(在本例中为Long)。
+这个过程是通过向其中一个转换器添加@InverseMethod注释来完成的，并让这个注释引用逆转换器。以下代码段中显示了此配置的示例：
+
+```
+public class Converter {
+    @InverseMethod("stringToDate")
+    public static String dateToString(EditText view, long oldValue, long value) {
+        // Converts long to String.
+    }
+
+    public static long stringToDate(EditText view, String oldValue, String value) {
+        // Converts String to long.
+    }
+}
+```
+
+#### 使用双向数据绑定的无限循环
+
+在使用双向数据绑定时，注意不要引入无限循环。当用户更改属性时，将调用使用@InverseBindingAdapter注释的方法，并将该值分配给支持属性。
+然后，这将调用使用@BindingAdapter注释的方法，这将触发对使用@InverseBindingAdapter注释的方法的另一个调用，以此类推。
+
+因此，通过比较使用@BindingAdapter注释的方法中的新值和旧值，打破可能的无限循环是很重要的。
+
+#### 双向属性
+
+当您使用下表中的属性时，平台提供了对双向数据绑定的内置支持。
+[Two-way attributes](https://developer.android.google.cn/topic/libraries/data-binding/two-way#two-way-attributes)
