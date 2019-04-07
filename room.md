@@ -1,4 +1,4 @@
-# 安卓架构组件 Room 持久化类库
+# 安卓架构组件 Room
 
 > 作者：March    
 > 链接：[安卓架构组件 Room 持久化类库](https://github.com/maoqiqi/blog/blob/master/pages/android_room.md)    
