@@ -1,12 +1,6 @@
-# 安卓架构组件 Room
+# Room
 
-> 作者：March    
-> 链接：[安卓架构组件 Room 持久化类库](https://github.com/maoqiqi/blog/blob/master/pages/android_room.md)    
-> 博客：http://blog.csdn.net/u011810138    
-> 邮箱：fengqi.mao.march@gmail.com    
-> 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
-
-Room提供了一个SQLite之上的抽象层，使得在充分利用SQLite功能的前提下顺畅的访问数据库。
+Room提供了一个SQLite之上的抽象层，允许在充分利用SQLite的功能的同时进行更健壮的数据库访问。
 
 ## 简介
 
