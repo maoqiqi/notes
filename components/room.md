@@ -1,6 +1,28 @@
 # Room
 
-Room提供了一个SQLite之上的抽象层，允许在充分利用SQLite的功能的同时进行更健壮的数据库访问。
+> * **作者**：March
+> * **链接**：[安卓架构组件 Room 持久化类库]()
+> * **邮箱**：fengqi.mao.march@gmail.com
+> * **头条**：https://toutiao.io/u/425956/subjects
+> * **简书**：https://www.jianshu.com/u/02f2491c607d
+> * **掘金**：https://juejin.im/user/5b484473e51d45199940e2ae
+> * **CSDN**：http://blog.csdn.net/u011810138
+> * **SegmentFault**：https://segmentfault.com/u/maoqiqi
+> * **StackOverFlow**：https://stackoverflow.com/users/8223522
+>
+> 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+Room提供了一个SQLite之上的抽象层，使得在充分利用SQLite功能的前提下顺畅的访问数据库。
+
+## 目录
+
+* [简介](#简介)
+* [基本使用](#基本使用)
+* [数据库升级](#数据库升级)
+* [嵌套对象](#嵌套对象)
+* [和LiveData一起使用](#和LiveData一起使用)
+* [和RxJava一起使用](#和RxJava一起使用)
+* [直接游标访问](#直接游标访问)
 
 ## 简介
 
@@ -525,3 +547,8 @@ public interface UserDao {
     public Cursor getAll();
 }
 ```
+
+## Link
+
+* [Mock 测试](JAVA_MOCK.md)
+* [Espresso UI 测试框架](ANDROID_ESPRESSO.md)
